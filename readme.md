@@ -167,12 +167,6 @@ See [INSTALLER_SETUP.md](INSTALLER_SETUP.md) for detailed installer configuratio
 
 ---
 
-## 🚀 Release & Deployment
-
-Follow the [BUILD_AND_RELEASE_GUIDE.md](BUILD_AND_RELEASE_GUIDE.md) for complete instructions on building and releasing new versions.
-
----
-
 ## 📝 License
 
 See [LICENSE](LICENSE) file for licensing information.
