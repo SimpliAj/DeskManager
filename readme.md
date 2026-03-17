@@ -163,8 +163,6 @@ Use the provided build scripts to create the installer:
 build-installer.bat
 ```
 
-See [INSTALLER_SETUP.md](INSTALLER_SETUP.md) for detailed installer configuration.
-
 ---
 
 ## 📝 License
