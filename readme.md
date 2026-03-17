@@ -212,7 +212,3 @@ Contributions are welcome! Please follow these guidelines:
 4. Submit a pull request
 
 ---
-
-**Version:** 1.0.0  
-**Last Updated:** March 2026  
-**Platform:** Windows 10+
