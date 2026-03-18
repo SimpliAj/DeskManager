@@ -163,14 +163,6 @@ Use the provided build scripts to create the installer:
 build-installer.bat
 ```
 
-See [INSTALLER_SETUP.md](INSTALLER_SETUP.md) for detailed installer configuration.
-
----
-
-## 🚀 Release & Deployment
-
-Follow the [BUILD_AND_RELEASE_GUIDE.md](BUILD_AND_RELEASE_GUIDE.md) for complete instructions on building and releasing new versions.
-
 ---
 
 ## 📝 License
@@ -212,7 +204,3 @@ Contributions are welcome! Please follow these guidelines:
 4. Submit a pull request
 
 ---
-
-**Version:** 1.0.0  
-**Last Updated:** March 2026  
-**Platform:** Windows 10+
