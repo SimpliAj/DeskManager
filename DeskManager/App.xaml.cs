@@ -23,34 +23,71 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Check for command-line arguments
-        _openSettingsOnStartup = e.Args.Contains("--settings") || e.Args.Contains("/settings");
-        bool isFirstLaunch = e.Args.Contains("--first-launch") || e.Args.Contains("/first-launch");
-
-        _gridManager = new GridManager();
-        _gridManager.LoadFromConfig(isFirstLaunch);
-        _gridManager.SpacesChanged += RebuildSpacesMenu;
-
-        // Starten des Update-Services
-        _updateService = new UpdateService();
-        await _updateService.InitializeAsync();
-
-        BuildTrayIcon();
-        StartDrawService();
-
-        // Open Settings window if requested (first launch or --settings flag)
-        if (_openSettingsOnStartup || isFirstLaunch)
+        try
         {
-            Dispatcher.Invoke(() => OpenSettings());
+            System.Diagnostics.Debug.WriteLine("=== App Startup Started ===");
+
+            // Check for command-line arguments
+            _openSettingsOnStartup = e.Args.Contains("--settings") || e.Args.Contains("/settings");
+            bool isFirstLaunch = e.Args.Contains("--first-launch") || e.Args.Contains("/first-launch");
+
+            System.Diagnostics.Debug.WriteLine("Creating GridManager...");
+            _gridManager = new GridManager();
+            
+            System.Diagnostics.Debug.WriteLine("Loading config...");
+            _gridManager.LoadFromConfig(isFirstLaunch);
+            _gridManager.SpacesChanged += RebuildSpacesMenu;
+
+            System.Diagnostics.Debug.WriteLine("Initializing UpdateService...");
+            // Starten des Update-Services
+            _updateService = new UpdateService();
+            await _updateService.InitializeAsync();
+
+            System.Diagnostics.Debug.WriteLine("Building tray icon...");
+            BuildTrayIcon();
+            
+            System.Diagnostics.Debug.WriteLine("Starting draw service...");
+            StartDrawService();
+
+            // Open Settings window if requested (first launch or --settings flag)
+            if (_openSettingsOnStartup || isFirstLaunch)
+            {
+                System.Diagnostics.Debug.WriteLine("Opening Settings window...");
+                Dispatcher.Invoke(() => OpenSettings());
+            }
+            
+            // Register for session ending event (PC shutdown/logout)
+            Current.SessionEnding += Current_SessionEnding;
+
+            // Show startup notification
+            if (_gridManager.Config.NotificationsEnabled)
+            {
+                System.Diagnostics.Debug.WriteLine("Showing startup notification...");
+                ShowStartupNotification();
+            }
+
+            System.Diagnostics.Debug.WriteLine("=== App Startup Complete ===");
         }
-        
-        // Register for session ending event (PC shutdown/logout)
-        Current.SessionEnding += Current_SessionEnding;
-
-        // Show startup notification
-        if (_gridManager.Config.NotificationsEnabled)
+        catch (Exception ex)
         {
-            ShowStartupNotification();
+            System.Diagnostics.Debug.WriteLine($"❌ FATAL ERROR during startup: {ex.GetType().Name}");
+            System.Diagnostics.Debug.WriteLine($"❌ Message: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"❌ StackTrace: {ex.StackTrace}");
+
+            // Try to show error message in a message box
+            try
+            {
+                System.Windows.MessageBox.Show(
+                    $"Fehler beim Starten:\n\n{ex.GetType().Name}: {ex.Message}\n\nDetails siehe Output-Fenster.",
+                    "DeskManager - Startfehler",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+            }
+            catch { }
+
+            // Don't shutdown - let the user see the error
+            // Shutdown();
         }
     }
 

@@ -12,11 +12,12 @@ using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace DeskManager.Windows;
 
+enum SettingsPage { Welcome, Personalization, Hide, Spaces, General, Wiki, About }
+
 public partial class SettingsWindow : Window
 {
     private readonly GridManager _manager;
 
-    // Working copies of the theme colors (ARGB hex strings)
     private string _bgColor;
     private string _titleColor;
     private string _borderColor;
@@ -33,35 +34,78 @@ public partial class SettingsWindow : Window
         _borderColor = theme.BorderColor;
         _textColor   = theme.TextColor;
 
-
         LoadThemeControls();
         LoadSpacesList();
 
         _manager.SpacesChanged += OnSpacesChanged;
+
+        NavigateTo(SettingsPage.Welcome);
+    }
+
+    // ─── Navigation ─────────────────────────────────────────────────────────
+
+    private void NavigateTo(SettingsPage page)
+    {
+        if (PageWelcome == null) return; // Called during InitializeComponent before panels exist
+
+        PageWelcome.Visibility         = Visibility.Collapsed;
+        PagePersonalization.Visibility = Visibility.Collapsed;
+        PageHide.Visibility            = Visibility.Collapsed;
+        PageSpaces.Visibility          = Visibility.Collapsed;
+        PageGeneral.Visibility         = Visibility.Collapsed;
+        PageWiki.Visibility            = Visibility.Collapsed;
+        PageAbout.Visibility           = Visibility.Collapsed;
+
+        switch (page)
+        {
+            case SettingsPage.Welcome:         PageWelcome.Visibility = Visibility.Visible; break;
+            case SettingsPage.Personalization: PagePersonalization.Visibility = Visibility.Visible; break;
+            case SettingsPage.Hide:            PageHide.Visibility = Visibility.Visible; break;
+            case SettingsPage.Spaces:          PageSpaces.Visibility = Visibility.Visible; break;
+            case SettingsPage.General:         PageGeneral.Visibility = Visibility.Visible; break;
+            case SettingsPage.Wiki:            PageWiki.Visibility = Visibility.Visible; break;
+            case SettingsPage.About:           PageAbout.Visibility = Visibility.Visible; break;
+        }
+
+        // Sync sidebar (index 5 is the non-selectable separator, so Wiki=6, About=7)
+        int[] indexMap = { 0, 1, 2, 3, 4, 6, 7 };
+        SidebarNav.SelectionChanged -= SidebarNav_SelectionChanged;
+        SidebarNav.SelectedIndex = indexMap[(int)page];
+        SidebarNav.SelectionChanged += SidebarNav_SelectionChanged;
+    }
+
+    private void SidebarNav_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ListBox lb || lb.SelectedIndex < 0) return;
+        SettingsPage page = lb.SelectedIndex switch
+        {
+            0 => SettingsPage.Welcome,
+            1 => SettingsPage.Personalization,
+            2 => SettingsPage.Hide,
+            3 => SettingsPage.Spaces,
+            4 => SettingsPage.General,
+            6 => SettingsPage.Wiki,
+            7 => SettingsPage.About,
+            _ => SettingsPage.Welcome
+        };
+        NavigateTo(page);
     }
 
     // ─── Theme Controls ─────────────────────────────────────────────────────
 
     private void LoadThemeControls()
     {
-        // Load autostart checkbox
         if (AutostartCheckbox != null)
-        {
             AutostartCheckbox.IsChecked = AutostartHelper.IsAutostartEnabled();
-        }
 
-        // Load notifications checkbox
         if (NotificationsCheckbox != null)
-        {
             NotificationsCheckbox.IsChecked = _manager.Config.NotificationsEnabled;
-        }
 
         SetColorButton(BgColorBtn,     _bgColor);
         SetColorButton(TitleColorBtn,  _titleColor);
         SetColorButton(BorderColorBtn, _borderColor);
         SetColorButton(TextColorBtn,   _textColor);
 
-        // Suppress ValueChanged while loading
         BgOpacity.ValueChanged     -= BgOpacity_Changed;
         TitleOpacity.ValueChanged  -= TitleOpacity_Changed;
         BorderOpacity.ValueChanged -= BorderOpacity_Changed;
@@ -79,6 +123,10 @@ public partial class SettingsWindow : Window
 
         UpdateOpacityLabels();
         UpdatePreview();
+
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        string versionText = v != null ? $"{v.Major}.{v.Minor}.{v.Build}" : "—";
+        VersionLabel.Text = versionText;
     }
 
     private static void SetColorButton(Button btn, string hex)
@@ -97,10 +145,21 @@ public partial class SettingsWindow : Window
 
     private void UpdatePreview()
     {
-        PreviewBorder.Background  = ParseBrush(_bgColor);
-        PreviewBorder.BorderBrush = ParseBrush(_borderColor);
-        PreviewTitle.Background   = ParseBrush(_titleColor);
+        PreviewBorder.Background    = ParseBrush(_bgColor);
+        PreviewBorder.BorderBrush   = ParseBrush(_borderColor);
+        PreviewTitle.Background     = ParseBrush(_titleColor);
         PreviewTitleText.Foreground = ParseBrush(_textColor);
+    }
+
+    private void ApplyThemeNow()
+    {
+        _manager.ApplyTheme(new ThemeConfig
+        {
+            GridBackground = _bgColor,
+            TitleBarColor  = _titleColor,
+            BorderColor    = _borderColor,
+            TextColor      = _textColor,
+        });
     }
 
     private static SolidColorBrush ParseBrush(string hex)
@@ -118,6 +177,7 @@ public partial class SettingsWindow : Window
             _bgColor = ThemeService.ToHex(c, (byte)BgOpacity.Value);
             SetColorButton(BgColorBtn, _bgColor);
             UpdatePreview();
+            ApplyThemeNow();
         }
     }
 
@@ -128,6 +188,7 @@ public partial class SettingsWindow : Window
             _titleColor = ThemeService.ToHex(c, (byte)TitleOpacity.Value);
             SetColorButton(TitleColorBtn, _titleColor);
             UpdatePreview();
+            ApplyThemeNow();
         }
     }
 
@@ -138,6 +199,7 @@ public partial class SettingsWindow : Window
             _borderColor = ThemeService.ToHex(c, (byte)BorderOpacity.Value);
             SetColorButton(BorderColorBtn, _borderColor);
             UpdatePreview();
+            ApplyThemeNow();
         }
     }
 
@@ -148,6 +210,7 @@ public partial class SettingsWindow : Window
             _textColor = ThemeService.ToHex(c, (byte)TextOpacity.Value);
             SetColorButton(TextColorBtn, _textColor);
             UpdatePreview();
+            ApplyThemeNow();
         }
     }
 
@@ -155,9 +218,9 @@ public partial class SettingsWindow : Window
     {
         using var dlg = new WinForms.ColorDialog
         {
-            Color             = initial,
-            FullOpen          = true,
-            AllowFullOpen     = true,
+            Color         = initial,
+            FullOpen      = true,
+            AllowFullOpen = true,
         };
         if (dlg.ShowDialog() == WinForms.DialogResult.OK)
         {
@@ -175,6 +238,7 @@ public partial class SettingsWindow : Window
         _bgColor = ThemeService.ToHex(ThemeService.ToDrawingColor(_bgColor), (byte)BgOpacity.Value);
         BgOpacityLabel.Text = $"{(int)BgOpacity.Value}";
         UpdatePreview();
+        ApplyThemeNow();
     }
 
     private void TitleOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -182,6 +246,7 @@ public partial class SettingsWindow : Window
         _titleColor = ThemeService.ToHex(ThemeService.ToDrawingColor(_titleColor), (byte)TitleOpacity.Value);
         TitleOpacityLabel.Text = $"{(int)TitleOpacity.Value}";
         UpdatePreview();
+        ApplyThemeNow();
     }
 
     private void BorderOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -189,6 +254,7 @@ public partial class SettingsWindow : Window
         _borderColor = ThemeService.ToHex(ThemeService.ToDrawingColor(_borderColor), (byte)BorderOpacity.Value);
         BorderOpacityLabel.Text = $"{(int)BorderOpacity.Value}";
         UpdatePreview();
+        ApplyThemeNow();
     }
 
     private void TextOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -196,6 +262,7 @@ public partial class SettingsWindow : Window
         _textColor = ThemeService.ToHex(ThemeService.ToDrawingColor(_textColor), (byte)TextOpacity.Value);
         TextOpacityLabel.Text = $"{(int)TextOpacity.Value}";
         UpdatePreview();
+        ApplyThemeNow();
     }
 
     // ─── Spaces ─────────────────────────────────────────────────────────────
@@ -243,32 +310,14 @@ public partial class SettingsWindow : Window
     private void DeleteSpace_Click(object sender, RoutedEventArgs e)
     {
         if (SpacesList.SelectedItem is not SpaceData space) return;
-
         var r = MessageBox.Show(
             $"Space \"{space.Name}\" und alle seine Grids löschen?",
             "Space löschen?", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-
         if (r == MessageBoxResult.Yes)
             _manager.DeleteSpace(space.Id);
     }
 
-    // ─── Bottom Buttons ─────────────────────────────────────────────────────
-
-    private void Apply_Click(object sender, RoutedEventArgs e)
-    {
-        _manager.ApplyTheme(new ThemeConfig
-        {
-            GridBackground = _bgColor,
-            TitleBarColor   = _titleColor,
-            BorderColor     = _borderColor,
-            TextColor       = _textColor,
-        });
-        Close();
-    }
-
-    private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
-
-
+    // ─── Other ──────────────────────────────────────────────────────────────
 
     private void ResetAll_Click(object sender, RoutedEventArgs e)
     {
@@ -281,58 +330,35 @@ public partial class SettingsWindow : Window
             "Die App wird nach dem Zurücksetzen neu gestartet.",
             "Alles Zurücksetzen?",
             WinForms.MessageBoxButtons.YesNo,
-            WinForms.MessageBoxIcon.Warning
-        );
+            WinForms.MessageBoxIcon.Warning);
 
         if (result == WinForms.DialogResult.Yes)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("🔄 Starting full reset...");
-                
-                // Step 1: Restore all files from storage to desktop
-                System.Diagnostics.Debug.WriteLine("Step 1: Restoring files from storage...");
                 _manager.RestoreAllFilesFromStorage();
-                
-                // Step 2: Close all grid windows
-                System.Diagnostics.Debug.WriteLine("Step 2: Closing all grid windows...");
                 _manager.CloseAllGridWindows();
-                
-                // Step 3: Clear all grids from config
-                System.Diagnostics.Debug.WriteLine("Step 3: Clearing all grids...");
                 _manager.ClearAllGrids();
-                
-                // Step 4: Reset theme to defaults
-                System.Diagnostics.Debug.WriteLine("Step 4: Resetting theme...");
                 _manager.ApplyTheme(new ThemeConfig());
-                
-                System.Diagnostics.Debug.WriteLine("✅ Reset completed successfully");
-                
+
                 WinForms.MessageBox.Show(
-                    "✅ Erfolgreich zurückgesetzt!\n\n" +
-                    "Die App wird jetzt neu gestartet.",
+                    "✅ Erfolgreich zurückgesetzt!\n\nDie App wird jetzt neu gestartet.",
                     "Zurückgesetzt",
                     WinForms.MessageBoxButtons.OK,
-                    WinForms.MessageBoxIcon.Information
-                );
-                
+                    WinForms.MessageBoxIcon.Information);
+
                 Close();
-                
-                // Restart the application
-                System.Diagnostics.Debug.WriteLine("Restarting application...");
                 var currentPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
                 System.Diagnostics.Process.Start(currentPath);
                 System.Windows.Application.Current.Shutdown();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error during reset: {ex.Message}");
                 WinForms.MessageBox.Show(
                     $"Fehler beim Zurücksetzen:\n{ex.Message}",
                     "Fehler",
                     WinForms.MessageBoxButtons.OK,
-                    WinForms.MessageBoxIcon.Error
-                );
+                    WinForms.MessageBoxIcon.Error);
             }
         }
     }
@@ -340,14 +366,8 @@ public partial class SettingsWindow : Window
     private void Autostart_Changed(object sender, RoutedEventArgs e)
     {
         bool isChecked = AutostartCheckbox.IsChecked ?? false;
-        if (isChecked)
-        {
-            AutostartHelper.EnableAutostart();
-        }
-        else
-        {
-            AutostartHelper.DisableAutostart();
-        }
+        if (isChecked) AutostartHelper.EnableAutostart();
+        else AutostartHelper.DisableAutostart();
     }
 
     private void Notifications_Changed(object sender, RoutedEventArgs e)
@@ -369,12 +389,9 @@ public partial class SettingsWindow : Window
         base.OnClosed(e);
     }
 
-    // ─── Helper ─────────────────────────────────────────────────────────────
-
     private string? PromptText(string title, string label, string defaultValue)
     {
-        var dlg = new PromptDialog(title, label, defaultValue);
-        dlg.Owner = this;
+        var dlg = new PromptDialog(title, label, defaultValue) { Owner = this };
         return dlg.ShowDialog() == true ? dlg.Result : null;
     }
 }

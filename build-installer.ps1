@@ -31,7 +31,7 @@ if (-not $SkipBuild) {
     Write-Host "[2/4] Projekt bauen..." -ForegroundColor Cyan
     try {
         Set-Location "$scriptDir\GridView"
-        & dotnet build -c $Configuration
+        & dotnet build "DeskManager.csproj" -c $Configuration
         if ($LASTEXITCODE -ne 0) {
             throw "Build fehlgeschlagen"
         }
@@ -50,7 +50,7 @@ if (-not $SkipPublish) {
     Write-Host "[3/4] Release publizieren..." -ForegroundColor Cyan
     try {
         Set-Location "$scriptDir\GridView"
-        & dotnet publish -c $Configuration -o "$scriptDir\publish" --no-build
+        & dotnet publish "DeskManager.csproj" -c $Configuration -o "$scriptDir\publish" --no-build
         if ($LASTEXITCODE -ne 0) {
             throw "Publish fehlgeschlagen"
         }
