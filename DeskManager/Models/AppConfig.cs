@@ -5,6 +5,7 @@ public class AppConfig
     public List<SpaceData> Spaces { get; set; } = [];
     public string ActiveSpaceId { get; set; } = "";
     public ThemeConfig Theme { get; set; } = new();
+    public bool NotificationsEnabled { get; set; } = true;
 }
 
 public class SpaceData

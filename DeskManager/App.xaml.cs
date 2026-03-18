@@ -46,6 +46,12 @@ public partial class App : Application
         
         // Register for session ending event (PC shutdown/logout)
         Current.SessionEnding += Current_SessionEnding;
+
+        // Show startup notification
+        if (_gridManager.Config.NotificationsEnabled)
+        {
+            ShowStartupNotification();
+        }
     }
 
     // ─── Desktop Draw Service ────────────────────────────────────────────────
@@ -194,5 +200,88 @@ public partial class App : Application
         
         System.Diagnostics.Debug.WriteLine("=== App exit complete ===");
         base.OnExit(e);
+    }
+
+    /// Show startup notification
+    private void ShowStartupNotification()
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"📢 Showing startup notification");
+            
+            // Run on background thread
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    string message = "DeskManager erfolgreich gestartet!";
+                    
+                    // Get app icon path (relative to installation directory)
+                    var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+                    var iconUri = new Uri(iconPath, UriKind.Absolute).AbsoluteUri;
+                    
+                    // Simple PowerShell command to show a toast notification
+                    string psCommand = $@"
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml(@'
+<toast duration='short'>
+    <visual>
+        <binding template='ToastImageAndText02'>
+            <image id='1' src='{iconUri}' />
+            <text id='1'>Information</text>
+            <text id='2'>{message}</text>
+        </binding>
+    </visual>
+</toast>
+'@)
+
+$toast = New-Object Windows.UI.Notifications.ToastNotification($xml)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('DeskManager').Show($toast)
+";
+
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -Command \"{psCommand}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                    };
+
+                    using (var process = System.Diagnostics.Process.Start(psi))
+                    {
+                        if (process != null)
+                        {
+                            string output = process.StandardOutput.ReadToEnd();
+                            string error = process.StandardError.ReadToEnd();
+                            process.WaitForExit(3000);
+
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"⚠️ Startup notification error: {error}");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"✅ Startup notification sent");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ Startup notification error: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"❌ Startup notification queue error: {ex.Message}");
+        }
     }
 }

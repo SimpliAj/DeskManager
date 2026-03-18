@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Xml;
 using DeskManager.Helpers;
 using DeskManager.Models;
 using DeskManager.Windows;
@@ -19,6 +20,7 @@ public class GridManager
 
     public IReadOnlyList<SpaceData> Spaces => _config.Spaces;
     public string ActiveSpaceId => _config.ActiveSpaceId;
+    public AppConfig Config => _config;
 
     // ─── Init ───────────────────────────────────────────────────────────────
 
@@ -414,6 +416,7 @@ public class GridManager
         // Toggle desktop icons as well
         Win32Helper.ToggleDesktopIcons(_allVisible);
         System.Diagnostics.Debug.WriteLine($"🔄 ToggleAll - Grids AND Desktop Icons: {_allVisible}");
+        ShowNotification(_allVisible ? "Grids und Desktop Icons eingeblendet " : "Grids und Desktop Icons ausgeblendet ");
     }
 
     public void ToggleGrids()
@@ -428,6 +431,7 @@ public class GridManager
         _desktopIconsVisible = !_desktopIconsVisible;
         Win32Helper.ToggleDesktopIcons(_desktopIconsVisible);
         System.Diagnostics.Debug.WriteLine($"🖥️ Desktop Icons toggled - visible: {_desktopIconsVisible}");
+        ShowNotification(_desktopIconsVisible ? "Desktop Icons eingeblendet " : "Desktop Icons ausgeblendet ");
     }
 
     public void ExpandAll()
@@ -634,5 +638,93 @@ public class GridManager
         }
         SaveConfig();
         System.Diagnostics.Debug.WriteLine($"✅ Cleared {gridCount} grids");
+    }
+
+    /// Show Windows Toast Notification (only if enabled)
+    private void ShowNotification(string message)
+    {
+        // Check if notifications are enabled
+        if (!_config.NotificationsEnabled)
+        {
+            System.Diagnostics.Debug.WriteLine($"📢 Notification disabled: {message}");
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"📢 Showing notification: {message}");
+            
+            // Run on background thread
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    // Get app icon path (relative to installation directory)
+                    var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+                    var iconUri = new Uri(iconPath, UriKind.Absolute).AbsoluteUri;
+                    
+                    // Simple PowerShell command to show a toast notification
+                    string psCommand = $@"
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml(@'
+<toast duration='short'>
+    <visual>
+        <binding template='ToastImageAndText02'>
+            <image id='1' src='{iconUri}' />
+            <text id='1'>DeskManager</text>
+            <text id='2'>{message}</text>
+        </binding>
+    </visual>
+</toast>
+'@)
+
+$toast = New-Object Windows.UI.Notifications.ToastNotification($xml)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('DeskManager').Show($toast)
+";
+
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -Command \"{psCommand}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                    };
+
+                    using (var process = System.Diagnostics.Process.Start(psi))
+                    {
+                        if (process != null)
+                        {
+                            string output = process.StandardOutput.ReadToEnd();
+                            string error = process.StandardError.ReadToEnd();
+                            process.WaitForExit(3000);
+
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"⚠️ PowerShell Error: {error}");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"✅ Notification sent successfully");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ Notification error: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"❌ Notification queue error: {ex.Message}");
+        }
     }
 }

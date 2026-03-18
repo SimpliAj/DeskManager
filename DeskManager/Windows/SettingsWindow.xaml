@@ -160,6 +160,46 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Notifications Option -->
+                        <Border Background="#220F3460" BorderBrush="#44FFFFFF" BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <CheckBox x:Name="NotificationsCheckbox"
+                                          Content="🔔 Benachrichtigungen aktivieren"
+                                          Foreground="#FFB3E5FC"
+                                          FontSize="11"
+                                          Checked="Notifications_Changed"
+                                          Unchecked="Notifications_Changed"
+                                          Margin="0,0,0,6"/>
+                                <TextBlock Text="Zeige Benachrichtigungen wenn Grids oder Desktop Icons ausgeblendet werden"
+                                           Foreground="#888888"
+                                           FontSize="10"
+                                           TextWrapping="Wrap"
+                                           Margin="20,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Check for Updates Option -->
+                        <Border Background="#220F3460" BorderBrush="#44FFFFFF" BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="⬆️ Updates prüfen"
+                                           Foreground="#FFB3E5FC"
+                                           FontSize="11"
+                                           FontWeight="Bold"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Prüfe manuell auf verfügbare Updates"
+                                           Foreground="#888888"
+                                           FontSize="10"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,10"/>
+                                <Button Content="Auf Updates prüfen"
+                                        Click="CheckForUpdates_Click"
+                                        Padding="12,6"
+                                        FontSize="10"
+                                        Width="Auto"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

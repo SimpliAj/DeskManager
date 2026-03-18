@@ -50,6 +50,12 @@ public partial class SettingsWindow : Window
             AutostartCheckbox.IsChecked = AutostartHelper.IsAutostartEnabled();
         }
 
+        // Load notifications checkbox
+        if (NotificationsCheckbox != null)
+        {
+            NotificationsCheckbox.IsChecked = _manager.Config.NotificationsEnabled;
+        }
+
         SetColorButton(BgColorBtn,     _bgColor);
         SetColorButton(TitleColorBtn,  _titleColor);
         SetColorButton(BorderColorBtn, _borderColor);
@@ -342,6 +348,19 @@ public partial class SettingsWindow : Window
         {
             AutostartHelper.DisableAutostart();
         }
+    }
+
+    private void Notifications_Changed(object sender, RoutedEventArgs e)
+    {
+        bool isChecked = NotificationsCheckbox.IsChecked ?? false;
+        _manager.Config.NotificationsEnabled = isChecked;
+        _manager.SaveConfig();
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        var updateService = new UpdateService();
+        await updateService.CheckForUpdatesAsync();
     }
 
     protected override void OnClosed(EventArgs e)

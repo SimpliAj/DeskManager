@@ -22,6 +22,17 @@ public class UpdateService
     public UpdateService()
     {
         _client.DefaultRequestHeaders.Add("User-Agent", "DeskManager-Updater");
+        
+        // Get and debug current version
+        try
+        {
+            _currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            System.Diagnostics.Debug.WriteLine($"📦 UpdateService initialized - Current App Version: {_currentVersion}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"❌ Error reading assembly version: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -32,7 +43,8 @@ public class UpdateService
         try
         {
             _currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            await CheckForUpdatesAsync();
+            System.Diagnostics.Debug.WriteLine($"📦 UpdateService initialized - Current App Version: {_currentVersion}");
+            // Check for updates wird nur durchgeführt wenn der Benutzer den Button drückt
         }
         catch (Exception ex)
         {
@@ -59,23 +71,52 @@ public class UpdateService
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
+            System.Diagnostics.Debug.WriteLine($"GitHub API returned {root.GetArrayLength()} releases");
+
             if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
             {
-                var latestRelease = root[0];
-                var latestVersionStr = latestRelease.GetProperty("tag_name").GetString()?.TrimStart('v');
-                var downloadUrl = latestRelease.GetProperty("html_url").GetString();
-                var releaseNotes = latestRelease.GetProperty("body").GetString() ?? "";
+                // Find the latest version by parsing all releases and comparing versions
+                Version? latestVersion = null;
+                JsonElement? latestReleaseElement = null;
+                string? latestVersionStr = null;
 
-                if (Version.TryParse(latestVersionStr, out var latestVersion))
+                for (int i = 0; i < root.GetArrayLength(); i++)
                 {
+                    var release = root[i];
+                    var tagName = release.GetProperty("tag_name").GetString()?.TrimStart('v');
+                    
+                    System.Diagnostics.Debug.WriteLine($"Release {i}: tag_name={tagName}");
+
+                    if (Version.TryParse(tagName, out var version))
+                    {
+                        if (latestVersion == null || version > latestVersion)
+                        {
+                            latestVersion = version;
+                            latestReleaseElement = release;
+                            latestVersionStr = tagName;
+                        }
+                    }
+                }
+
+                if (latestReleaseElement.HasValue)
+                {
+                    var downloadUrl = latestReleaseElement.Value.GetProperty("html_url").GetString();
+                    var releaseNotes = latestReleaseElement.Value.GetProperty("body").GetString() ?? "";
+
                     System.Diagnostics.Debug.WriteLine(
                         $"Aktuelle Version: {_currentVersion}, " +
-                        $"Verfügbar: {latestVersion}"
+                        $"Verfügbar (latest): {latestVersion}"
                     );
 
                     if (latestVersion > _currentVersion)
                     {
+                        System.Diagnostics.Debug.WriteLine($"✅ Update available! {latestVersion} > {_currentVersion}");
                         ShowUpdateDialog(latestVersion, downloadUrl, releaseNotes);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"✅ App is up to date. {_currentVersion} >= {latestVersion}");
+                        ShowUpToDateDialog(latestVersion);
                     }
                 }
             }
@@ -95,6 +136,10 @@ public class UpdateService
     /// </summary>
     private void ShowUpdateDialog(Version newVersion, string? downloadUrl, string releaseNotes)
     {
+        System.Diagnostics.Debug.WriteLine($"🔍 ShowUpdateDialog called with version: {newVersion}");
+        System.Diagnostics.Debug.WriteLine($"   Current version: {_currentVersion}");
+        System.Diagnostics.Debug.WriteLine($"   Comparison: {newVersion} > {_currentVersion} = {newVersion > _currentVersion}");
+        
         var message = $"Neue Version verfügbar: {newVersion}\n\n";
 
         if (!string.IsNullOrWhiteSpace(releaseNotes))
@@ -135,6 +180,22 @@ public class UpdateService
                 );
             }
         }
+    }
+
+    /// <summary>
+    /// Zeigt Dialog an, wenn App bereits up-to-date ist
+    /// </summary>
+    private void ShowUpToDateDialog(Version currentVersion)
+    {
+        var message = $"✅ Du hast bereits die neueste Version: {currentVersion}\n\n" +
+                      "Deine Installation ist aktuell.";
+
+        WPFMessageBox.Show(
+            message,
+            "DeskManager aktuell",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information
+        );
     }
 
     /// <summary>
