@@ -434,6 +434,23 @@ public class GridManager
         ShowNotification(_desktopIconsVisible ? "Desktop Icons eingeblendet " : "Desktop Icons ausgeblendet ");
     }
 
+    public void ToggleAllCollapse()
+    {
+        bool anyOpen = _windows.Any(w => !w.IsCollapsed);
+        if (anyOpen) CollapseAll();
+        else         ExpandAll();
+    }
+
+    public void CollapseAll()
+    {
+        foreach (var w in _windows)
+        {
+            if (!w.IsCollapsed)
+                w.Dispatcher.Invoke(() => w.PublicCollapse());
+        }
+        SaveConfig();
+    }
+
     public void ExpandAll()
     {
         // Expand all grid windows (opposite of collapse)

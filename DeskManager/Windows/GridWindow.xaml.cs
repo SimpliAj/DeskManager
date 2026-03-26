@@ -52,6 +52,9 @@ public partial class GridWindow : Window
     private SnapEdge _snapEdge = SnapEdge.None;
     private bool _snapping;  // guard against recursive LocationChanged
     private bool _isLayoutFlipped; // true when title bar is at bottom (top-snap expanded)
+    private bool _pinnedExpanded;  // true when user explicitly expanded (button or ExpandAll) — suppresses peek-collapse on MouseLeave
+    private DispatcherTimer? _peekTimer;   // polls cursor position for peek expand/collapse on snapped windows
+    private bool _wasMouseOver;            // last known hover state from peek poll
 
     /// Win32 handle — used by GridManager for physical-pixel bounds.
     public IntPtr Hwnd => new WindowInteropHelper(this).Handle;
@@ -139,9 +142,7 @@ public partial class GridWindow : Window
         // Auto-save on size changes
         SizeChanged += (_, _) => ScheduleAutoSave();
 
-        // Peek: expand on hover when edge-snapped, re-collapse on leave
-        MouseEnter += (_, _) => { if (_snapEdge != SnapEdge.None && IsCollapsed) Expand(); };
-        MouseLeave += (_, _) => { if (_snapEdge != SnapEdge.None && !IsCollapsed) Collapse(); };
+        // Peek handled via Win32 WM_MOUSEMOVE / WM_MOUSELEAVE in WndProc (reliable from app start)
 
         // Setup auto-save timer (debounced, 1 second delay)
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -156,12 +157,8 @@ public partial class GridWindow : Window
             }
         };
         
-        // Initialize snap edge on first render - ensures auto-collapse works after restart
-        Loaded += (_, _) => 
-        {
-            // Delay slightly to ensure ActualWidth/ActualHeight are correct
-            Dispatcher.BeginInvoke(() => InitializeSnapEdge(), System.Windows.Threading.DispatcherPriority.Render);
-        };
+        // Initialize snap edge after first render — ActualWidth/ActualHeight are correct at Render priority
+        Dispatcher.BeginInvoke(() => InitializeSnapEdge(), System.Windows.Threading.DispatcherPriority.Render);
     }
 
 
@@ -228,8 +225,47 @@ public partial class GridWindow : Window
             Focus();
         }
 
-        // If snapped and collapsed, auto-collapse behavior should work on hover now
+        // Top-edge + collapsed on load: fix corner radius (CollapseInstant ran before snap was known)
+        if (_snapEdge == SnapEdge.Top && IsCollapsed)
+            TitleBarBorder.CornerRadius = new CornerRadius(0, 0, 8, 8);
+
+        UpdatePeekTimer();
         System.Diagnostics.Debug.WriteLine($"🎯 Grid '{GridData.Title}' snap edge detected on load: {_snapEdge}");
+    }
+
+    /// Start or stop the peek poll timer based on whether the window is currently snapped.
+    private void UpdatePeekTimer()
+    {
+        if (_snapEdge != SnapEdge.None)
+        {
+            if (_peekTimer == null)
+            {
+                _peekTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+                _peekTimer.Tick += PeekPollTick;
+            }
+            _peekTimer.Start();
+        }
+        else
+        {
+            _peekTimer?.Stop();
+        }
+    }
+
+    private void PeekPollTick(object? sender, EventArgs e)
+    {
+        if (_snapEdge == SnapEdge.None) { _peekTimer?.Stop(); return; }
+
+        Win32Helper.GetCursorPos(out var pt);
+        Win32Helper.GetWindowRect(Hwnd, out var rect);
+        bool isOver = rect.Contains(pt.X, pt.Y);
+
+        if (isOver == _wasMouseOver) return;
+        _wasMouseOver = isOver;
+
+        if (isOver && IsCollapsed)
+            Expand();
+        else if (!isOver && !IsCollapsed && !_pinnedExpanded)
+            Collapse();
     }
 
     // ─── Edge Snapping ──────────────────────────────────────────────────────
@@ -254,6 +290,8 @@ public partial class GridWindow : Window
 
         if (_snapEdge != SnapEdge.None && !IsCollapsed)
             Collapse();
+
+        UpdatePeekTimer();
     }
 
     /// Runs on every LocationChanged — magnetic pull toward screen edges.
@@ -451,16 +489,16 @@ public partial class GridWindow : Window
                 
                 if (_collapseBtnClickCount == 2)
                 {
-                    // Double-click → expand ALL collapsed grids
-                    System.Diagnostics.Debug.WriteLine("🔘 Double-click on collapse button - expanding ALL collapsed grids");
-                    _manager.ExpandAll();
+                    // Double-click → toggle all grids (any open → collapse all, all closed → expand all)
+                    System.Diagnostics.Debug.WriteLine("🔘 Double-click on collapse button - toggling ALL grids");
+                    _manager.ToggleAllCollapse();
                 }
                 else
                 {
                     // Single click → toggle only this grid
                     System.Diagnostics.Debug.WriteLine("🔘 Single-click on collapse button - toggling this grid");
-                    if (IsCollapsed) Expand();
-                    else             Collapse();
+                    if (IsCollapsed) { _pinnedExpanded = true;  Expand();   }
+                    else             { _pinnedExpanded = false; Collapse(); }
                 }
                 
                 _collapseBtnClickCount = 0;
@@ -502,6 +540,7 @@ public partial class GridWindow : Window
     private void CollapseInstant()
     {
         IsCollapsed            = true;
+        _pinnedExpanded        = false;
         ContentArea.Visibility = Visibility.Collapsed;
         ResizeStrip.Visibility = Visibility.Collapsed;
 
@@ -519,6 +558,10 @@ public partial class GridWindow : Window
             var (_, _, _, waBottom) = GetWorkArea();
             Top = waBottom - 38;
         }
+
+        // Top-edge: collapsed strip hangs down from screen edge → round bottom corners
+        if (_snapEdge == SnapEdge.Top)
+            TitleBarBorder.CornerRadius = new CornerRadius(0, 0, 8, 8);
 
         GridData.Collapsed = true;
     }
@@ -556,7 +599,14 @@ public partial class GridWindow : Window
     /// Public method to expand this grid (for ExpandAll functionality)
     public void PublicExpand()
     {
+        _pinnedExpanded = true;
         Expand();
+    }
+
+    /// Public method to collapse this grid (for CollapseAll functionality)
+    public void PublicCollapse()
+    {
+        Collapse();
     }
     // ─── Remove Grid ───────────────────────────────────────────────────────
 
@@ -1235,6 +1285,7 @@ public partial class GridWindow : Window
         _autoSaveTimer?.Stop();
         _doubleClickTimer?.Stop();
         _collapseBtnTimer?.Stop();
+        _peekTimer?.Stop();
         base.OnClosed(e);
     }
 }

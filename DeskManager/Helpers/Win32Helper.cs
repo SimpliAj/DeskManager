@@ -20,6 +20,12 @@ public static class Win32Helper
     public const int WS_EX_LAYERED     = 0x00080000;
 
     public const int WM_WINDOWPOSCHANGING = 0x0046;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT lpPoint);
     
     // ShowWindow constants
     public const int SW_HIDE = 0;
